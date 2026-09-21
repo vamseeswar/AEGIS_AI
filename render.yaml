@@ -1,0 +1,122 @@
+# ============================================================
+# AEGIS AI — Render Infrastructure as Code Blueprint
+# Free-Tier Cloud Deployment Specification
+# Docs: https://render.com/docs/blueprint-spec
+# ============================================================
+version: "1"
+
+services:
+  # ------------------------------------------------------------
+  # 1. AEGIS AI Backend API (FastAPI + asyncpg + pgvector)
+  # ------------------------------------------------------------
+  - type: web
+    name: aegis-backend
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: Dockerfile.backend
+    dockerContext: .
+    healthCheckPath: /api/v1/health
+    numInstances: 1
+    autoDeploy: true
+    envVars:
+      - key: APP_NAME
+        value: "AEGIS AI"
+      - key: APP_ENV
+        value: production
+      - key: HOST
+        value: "0.0.0.0"
+      - key: PORT
+        value: "8000"
+      - key: WORKERS
+        value: "1"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: aegis-db
+          property: connectionString
+      - key: DATABASE_URL_SYNC
+        fromDatabase:
+          name: aegis-db
+          property: connectionString
+      - key: DB_POOL_SIZE
+        value: "5"
+      - key: DB_MAX_OVERFLOW
+        value: "2"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "60"
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: "7"
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: LLM_MODEL
+        value: gemini-1.5-flash
+      - key: LLM_API_KEY
+        sync: false
+      - key: EMBEDDING_PROVIDER
+        value: local
+      - key: EMBEDDING_MODEL
+        value: all-MiniLM-L6-v2
+      - key: STORAGE_PROVIDER
+        value: local
+      - key: LOCAL_STORAGE_PATH
+        value: /app/storage
+      - key: CORS_ORIGINS
+        value: "https://aegis-frontend.onrender.com,http://localhost:3000"
+      - key: RATE_LIMIT_ENABLED
+        value: "true"
+      - key: RATE_LIMIT_REQUESTS_PER_MINUTE
+        value: "120"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: ENABLE_METRICS
+        value: "true"
+    disk:
+      name: aegis-storage
+      mountPath: /app/storage
+      sizeGB: 1
+
+  # ------------------------------------------------------------
+  # 2. AEGIS AI Frontend Web UI (Next.js 14 Standalone)
+  # ------------------------------------------------------------
+  - type: web
+    name: aegis-frontend
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: Dockerfile.frontend
+    dockerContext: .
+    healthCheckPath: /api/health
+    numInstances: 1
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      - key: HOSTNAME
+        value: "0.0.0.0"
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: aegis-backend
+          envVarKey: RENDER_EXTERNAL_URL
+
+databases:
+  # ------------------------------------------------------------
+  # 3. AEGIS AI PostgreSQL Database
+  # Render provides a 30-day free database. For perpetual free hosting,
+  # users can easily connect to Neon.tech or Supabase (see docs/deployment-free-tier.md).
+  # ------------------------------------------------------------
+  - name: aegis-db
+    plan: free
+    region: oregon
+    databaseName: aegis_ai
+    user: aegisuser
+    postgresMajorVersion: "16"
+    ipAllowList: []

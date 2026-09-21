@@ -1,0 +1,5 @@
+Autonomous Agent Operational Guidelines v2.4
+
+1. Agents must operate within assigned MCP tool execution policies.
+2. LangGraph state transitions are checkpointed for high-availability resume.
+3. HITL approval is mandatory for financial transfers and database migrations.

@@ -1,0 +1,32 @@
+# ============================================================
+# AEGIS AI — Local Development Docker Compose Override
+# Live code reloading for backend & frontend development
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# ============================================================
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      APP_ENV: development
+      DEBUG: "true"
+    volumes:
+      - ./backend:/app/backend:ro
+      - ./ml:/app/ml:ro
+      - ./storage:/app/storage
+    command: ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: deps
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    command: ["npm", "run", "dev"]

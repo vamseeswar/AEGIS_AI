@@ -1,0 +1,181 @@
+name: AEGIS AI — Continuous Integration (CI)
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ============================================================
+  # Job 1: Backend Code Quality & Linting
+  # ============================================================
+  backend-lint:
+    name: Backend Code Quality & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Linter Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Run Ruff Lint Check
+        run: |
+          ruff check backend/ tests/
+
+      - name: Run Ruff Format Check
+        run: |
+          ruff format --check backend/ tests/
+
+  # ============================================================
+  # Job 2: Backend Test Suite & Coverage with PostgreSQL/pgvector
+  # ============================================================
+  backend-test:
+    name: Backend Pytest Suite & Coverage
+    runs-on: ubuntu-latest
+    needs: [backend-lint]
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: aegis
+          POSTGRES_PASSWORD: aegis_secure_pass_2026!
+          POSTGRES_DB: aegis_ai
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aegis -d aegis_ai"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      APP_ENV: test
+      APP_NAME: AEGIS AI CI Test
+      DATABASE_URL: postgresql+asyncpg://aegis:aegis_secure_pass_2026!@localhost:5432/aegis_ai
+      JWT_SECRET_KEY: aegis_ci_jwt_secret_key_prod_2026_enterprise_hardening_docker!
+      DEFAULT_LLM_PROVIDER: mock
+      EMBEDDING_PROVIDER: local
+      RATE_LIMIT_ENABLED: "false"
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install System Libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libpq-dev
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install pytest-cov
+
+      - name: Run Pytest Suite with Coverage
+        run: |
+          python -m pytest tests/ -v --cov=backend --cov-report=xml --cov-report=term
+
+      - name: Upload Test Coverage Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage-report
+          path: coverage.xml
+          retention-days: 14
+
+  # ============================================================
+  # Job 3: Frontend Lint & Next.js Production Build
+  # ============================================================
+  frontend-check:
+    name: Frontend Lint & Next.js Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Build Next.js Production Bundle
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+          NEXT_TELEMETRY_DISABLED: 1
+        run: npm run build
+
+  # ============================================================
+  # Job 4: Docker Container Build & Compose Validation
+  # ============================================================
+  docker-build-verify:
+    name: Docker Build & Compose Verification
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-check]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validate Docker Compose Configuration
+        run: |
+          docker compose config
+
+      - name: Build Backend Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: false
+          tags: aegis-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Frontend Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: frontend/Dockerfile
+          push: false
+          tags: aegis-frontend:ci
+          build-args: |
+            NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

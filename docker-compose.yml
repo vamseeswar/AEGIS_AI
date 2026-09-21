@@ -1,0 +1,101 @@
+# ============================================================
+# AEGIS AI — Production Container Orchestration
+# Services: PostgreSQL 16 + pgvector, FastAPI Backend, Next.js Frontend
+# ============================================================
+
+services:
+  # 1. Database: PostgreSQL 16 with pgvector Extension
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: aegis-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-aegis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aegis_secure_pass_2026!}
+      POSTGRES_DB: ${POSTGRES_DB:-aegis_ai}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aegis} -d ${POSTGRES_DB:-aegis_ai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - aegis-network
+
+  # 2. Backend: FastAPI Application Server
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: aegis-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_NAME: ${APP_NAME:-AEGIS AI Enterprise Platform}
+      APP_ENV: ${APP_ENV:-production}
+      DEBUG: "false"
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://aegis:aegis_secure_pass_2026!@db:5432/aegis_ai}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-aegis_super_secure_jwt_secret_key_prod_2026_enterprise_hardening_docker!}
+      CORS_ORIGINS: '["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost"]'
+      DEFAULT_LLM_PROVIDER: ${DEFAULT_LLM_PROVIDER:-mock}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-local}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      FILE_STORAGE_PATH: /app/storage
+      RATE_LIMIT_ENABLED: "true"
+      RATE_LIMIT_IP_CAPACITY: 120
+      RATE_LIMIT_TENANT_CAPACITY: 600
+    ports:
+      - "8000:8000"
+    volumes:
+      - aegis-storage:/app/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - aegis-network
+
+  # 3. Frontend: Next.js 14 Standalone Production Client
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
+    container_name: aegis-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - aegis-network
+
+networks:
+  aegis-network:
+    driver: bridge
+
+volumes:
+  pgdata:
+    driver: local
+  aegis-storage:
+    driver: local

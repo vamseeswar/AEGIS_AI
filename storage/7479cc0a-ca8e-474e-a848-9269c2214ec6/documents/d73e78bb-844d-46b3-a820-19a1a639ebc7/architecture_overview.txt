@@ -1,0 +1,7 @@
+AEGIS Autonomous AI Platform Architecture.
+
+Section 1: Multi-Agent state machine uses LangGraph with supervisor routing.
+
+Section 2: AST safety parsing rejects all DML and DDL mutations in SQL analyst agent.
+
+Section 3: pgvector stores chunk embeddings with cosine similarity distance.

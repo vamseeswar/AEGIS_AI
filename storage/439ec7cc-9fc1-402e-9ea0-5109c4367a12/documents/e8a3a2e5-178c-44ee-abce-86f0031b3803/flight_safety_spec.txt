@@ -1,0 +1,2 @@
+FLIGHT SAFETY DIRECTIVE 901
+Autonomous control systems must disengage upon detecting primary thruster variance exceeding 4.2 percent. Backup stabilization thrusters engage automatically within 250 milliseconds.

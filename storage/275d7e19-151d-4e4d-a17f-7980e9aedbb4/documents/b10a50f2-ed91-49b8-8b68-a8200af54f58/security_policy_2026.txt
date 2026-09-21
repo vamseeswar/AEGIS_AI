@@ -1,0 +1,5 @@
+# Enterprise Security Policy 2026
+
+Section 1.1: Multi-Factor Authentication (MFA) is strictly mandatory for all employees.
+Section 1.2: All production database queries must enforce an execution timeout limit of 5000 milliseconds.
+Section 1.3: Data loss prevention rules require immediate redaction of all social security and payment card numbers.

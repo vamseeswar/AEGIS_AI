@@ -1,0 +1,1 @@
+Database Failover SOP: In case of primary disk threshold reaching 90%, initiate secondary replication failover.
